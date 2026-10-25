@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f4e79">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.json">
+<title>CampusPulse</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root{--ink:#16202b;--muted:#5d6b78;--line:#e3e8ee;--bg:#fff;--soft:#f4f7fa;--brand:#1f4e79;--food:#c2410c;--post:#7c3aed;--ok:#15803d;--bad:#b91c1c}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+#app{display:flex;flex-direction:column;height:100%}
+header{padding:10px 14px 6px;padding-top:max(10px,env(safe-area-inset-top));border-bottom:1px solid var(--line)}
+.top{display:flex;align-items:center;justify-content:space-between}
+h1{font-size:18px;margin:0;color:var(--brand)}
+.sub{font-size:12px;color:var(--muted)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:8px 0 2px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 11px;font-size:13px;color:var(--ink)}
+.chip.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.chip input{border:0;font:inherit;background:transparent;color:inherit;width:118px}
+#map{height:42vh;min-height:220px;flex:none}
+#list{flex:1;overflow-y:auto;padding-bottom:90px}
+.row{display:flex;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);cursor:pointer}
+.row:active{background:var(--soft)}
+.dot{width:10px;height:10px;border-radius:50%;margin-top:6px;flex:none;background:var(--brand)}
+.dot.food{background:var(--food)}.dot.post{background:var(--post)}
+.name{font-weight:600}
+.meta{font-size:13px;color:var(--muted)}
+.tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:4px;background:var(--soft);color:var(--muted);margin-right:4px}
+.tag.food{background:#fff1e8;color:var(--food)}.tag.post{background:#f3edff;color:var(--post)}.tag.now{background:#e8f6ee;color:var(--ok)}
+.empty{padding:28px 18px;color:var(--muted);text-align:center}
+.fab{position:fixed;right:16px;bottom:max(18px,env(safe-area-inset-bottom));background:var(--post);color:#fff;border:0;border-radius:999px;padding:13px 18px;font-size:15px;font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,.2);z-index:500}
+.sheet-bg{position:fixed;inset:0;background:rgba(10,20,30,.35);z-index:900;display:none}
+.sheet{position:fixed;left:0;right:0;bottom:0;background:#fff;border-radius:16px 16px 0 0;padding:18px 16px;padding-bottom:max(18px,env(safe-area-inset-bottom));z-index:1000;max-height:86vh;overflow-y:auto;display:none}
+.sheet.open,.sheet-bg.open{display:block}
+.sheet h2{font-size:18px;margin:0 0 4px}
+.btns{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.btn{flex:1;min-width:120px;border:1px solid var(--line);background:#fff;border-radius:10px;padding:11px;font-size:15px;font-weight:600;color:var(--ink)}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.ok{color:var(--ok)}.btn.bad{color:var(--bad)}
+label{display:block;font-size:13px;color:var(--muted);margin:12px 0 4px}
+input[type=text],select{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:16px;background:#fff;color:var(--ink)}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.note{font-size:12px;color:var(--muted);margin-top:10px}
+.fresh{margin-top:10px;padding:10px;border-radius:8px;background:var(--soft);font-size:13px}
+.toast{position:fixed;left:50%;top:14px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 14px;border-radius:8px;font-size:14px;z-index:2000;display:none}
+.pin{width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.25)}
+.me{width:14px;height:14px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 6px rgba(37,99,235,.2)}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="top">
+      <div><h1>CampusPulse</h1><div class="sub" id="status">Loading events…</div></div>
+      <button class="chip" id="radiusBtn">10 min walk</button>
+    </div>
+    <div class="chips" id="when">
+      <button class="chip on" data-w="now">Now</button>
+      <button class="chip" data-w="2h">Next 2 hours</button>
+      <button class="chip" data-w="today">Rest of today</button>
+      <span class="chip" id="dayChip"><input type="date" id="day" aria-label="Pick a day"></span>
+    </div>
+    <div class="chips" id="cats">
+      <button class="chip" data-c="all">All</button>
+      <button class="chip" data-c="food">Free food</button>
+      <button class="chip" data-c="Social">Social</button>
+      <button class="chip" data-c="Sports">Sports</button>
+      <button class="chip" data-c="Learning">Learning</button>
+      <button class="chip" data-c="Arts">Arts</button>
+      <button class="chip" data-c="Cultural">Cultural</button>
+      <button class="chip" data-c="Service">Service</button>
+    </div>
+  </header>
+  <div id="map"></div>
+  <div id="list"></div>
+</div>
+<button class="fab" id="postBtn">+ Post something</button>
+<div class="sheet-bg" id="bg"></div>
+<div class="sheet" id="sheet"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const HUB = { lat: 33.77414, lng: -84.40039 };
+const WALK = 80; // meters per minute
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+const rid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now());
+const device = store.get('cp_device') || (() => { const d = rid(); store.set('cp_device', d); return d; })();
+const session = rid();
+const params = new URLSearchParams(location.search);
+if (params.get('t')) store.set('cp_tester', params.get('t').toUpperCase().slice(0, 12));
+const tester = store.get('cp_tester', null);
+
+const state = { when: 'now', cat: 'all', radius: 800, me: null, events: [], saved: new Set(store.get('cp_saved', [])), picking: false };
+
+function track(type, event_id, meta) {
+  fetch('/api/log', { method: 'POST', headers: { 'content-type': 'application/json' }, keepalive: true,
+    body: JSON.stringify({ device, tester, session, type, event_id, meta }) }).catch(() => {});
+}
+
+const $ = s => document.querySelector(s);
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 2200); }
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function meters(a, b) {
+  const R = 6371000, r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLng = (b.lng - a.lng) * r;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+const here = () => state.me || HUB;
+const walkMin = e => Math.max(1, Math.round(meters(here(), e) / WALK));
+const fmtTime = ms => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+function whenText(e, now) {
+  if (e.starts <= now) return e.source === 'post' ? `posted ${Math.max(1, Math.round((now - e.starts) / 60000))} min ago` : `happening now, until ${fmtTime(e.ends)}`;
+  const m = Math.round((e.starts - now) / 60000);
+  return m < 60 ? `starts in ${m} min` : `${new Date(e.starts).toLocaleDateString([], { weekday: 'short' })} ${fmtTime(e.starts)}`;
+}
+
+function windowRange() {
+  const now = Date.now();
+  if (state.when === 'now') return [now, now + 30 * 60000];
+  if (state.when === '2h') return [now, now + 2 * 3600000];
+  if (state.when === 'today') { const e = new Date(); e.setHours(23, 59, 0, 0); return [now, +e]; }
+  const [y, m, d] = state.when.split('-').map(Number);
+  return [+new Date(y, m - 1, d, 0, 0), +new Date(y, m - 1, d, 23, 59)];
+}
+
+// ---- map ----
+const map = L.map('map', { zoomControl: false, attributionControl: true }).setView([HUB.lat, HUB.lng], 16);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
+const layer = L.layerGroup().addTo(map);
+let meMarker = null, ring = null;
+map.on('click', ev => { if (state.picking) { state.picked = ev.latlng; state.picking = false; openPost(true); } });
+
+async function load() {
+  const [from, to] = windowRange();
+  try {
+    const r = await fetch(`/api/events?from=${from}&to=${to}`);
+    const d = await r.json();
+    state.events = d.events || [];
+    render();
+  } catch { $('#status').textContent = 'Could not reach the server. Pull to retry.'; }
+}
+
+function filtered() {
+  const local = state.when === 'now' || state.when === '2h';
+  return state.events
+    .filter(e => state.cat === 'all' || (state.cat === 'food' ? e.free_food : e.category === state.cat))
+    .filter(e => !local || state.radius === 0 || meters(here(), e) <= state.radius)
+    .sort((a, b) => local ? walkMin(a) - walkMin(b) || a.starts - b.starts : a.starts - b.starts);
+}
+
+function render() {
+  const now = Date.now();
+  const evs = filtered();
+  layer.clearLayers();
+  for (const e of evs) {
+    const color = e.source === 'post' ? '#7c3aed' : e.free_food ? '#c2410c' : '#1f4e79';
+    L.marker([e.lat, e.lng], { icon: L.divIcon({ className: '', html: `<div class="pin" style="background:${color}"></div>`, iconSize: [14, 14] }) })
+      .addTo(layer).on('click', () => openEvent(e.id));
+  }
+  if (ring) ring.remove();
+  const local = state.when === 'now' || state.when === '2h';
+  if (!local && evs.length) map.fitBounds(evs.map(e => [e.lat, e.lng]), { padding: [24, 24], maxZoom: 17 });
+  if (local && state.radius) ring = L.circle([here().lat, here().lng], { radius: state.radius, color: '#1f4e79', weight: 1, fillOpacity: .04 }).addTo(map);
+  const label = { now: 'now', '2h': 'in the next 2 hours', today: 'later today' }[state.when] || 'that day';
+  $('#status').textContent = `${evs.length} ${evs.length === 1 ? 'thing' : 'things'} ${label}${local && state.radius ? ' within a ' + Math.round(state.radius / WALK) + ' min walk' : ''}${state.me ? '' : ' of the Student Center'}`;
+  const list = $('#list');
+  if (!evs.length) {
+    list.innerHTML = `<div class="empty">Nothing here right now.<br><br>
+      <button class="btn" id="widen">${local ? 'Show the next 2 hours, anywhere on campus' : 'Show everything this week'}</button></div>`;
+    $('#widen').onclick = () => { track('filter', null, { widen: true }); state.radius = 0; if (state.when === 'now') setWhen('2h'); else setWhen('today'); };
+    return;
+  }
+  list.innerHTML = evs.map(e => `<div class="row" data-id="${esc(e.id)}">
+      <div class="dot ${e.source === 'post' ? 'post' : e.free_food ? 'food' : ''}"></div>
+      <div><div class="name">${esc(e.name)}</div>
+      <div class="meta">${esc(e.location || 'Pinned spot')} · ${walkMin(e)} min walk</div>
+      <div class="meta">${e.starts <= now ? '<span class="tag now">now</span>' : ''}${e.free_food ? '<span class="tag food">free food</span>' : ''}${e.source === 'post' ? '<span class="tag post">student post</span>' : ''}${esc(whenText(e, now))}</div></div></div>`).join('');
+  list.querySelectorAll('.row').forEach(r => r.onclick = () => openEvent(r.dataset.id));
+}
+
+// ---- sheets ----
+function openSheet(h) { $('#sheet').innerHTML = h; $('#sheet').classList.add('open'); $('#bg').classList.add('open'); }
+function closeSheet() { $('#sheet').classList.remove('open'); $('#bg').classList.remove('open'); }
+$('#bg').onclick = closeSheet;
+
+function openEvent(id) {
+  const e = state.events.find(x => x.id === id); if (!e) return;
+  track('view', e.id, { cat: e.free_food ? 'food' : e.category, src: e.source, walk: walkMin(e), when: state.when });
+  map.panTo([e.lat, e.lng]);
+  const now = Date.now(), live = e.starts <= now;
+  const fresh = e.source === 'post'
+    ? `<div class="fresh">Posted by a ${esc(e.poster_role || 'student')}. ${e.confirms ? `${e.confirms} ${e.confirms === 1 ? 'person' : 'people'} said it is still going.` : 'Nobody has confirmed it yet.'} Disappears at ${fmtTime(e.ends)} unless someone confirms.</div>`
+    : `<div class="fresh">From Engage${e.org ? ' · ' + esc(e.org) : ''}${e.rsvp != null ? ` · ${e.rsvp} RSVP${e.rsvp === 1 ? '' : 's'}` : ''}${e.geo_source === 'building' ? '<br>Pin placed at the building. Check the room above.' : ''}</div>`;
+  openSheet(`<h2>${esc(e.name)}</h2>
+    <div class="meta">${esc(e.location || 'Pinned spot')} · ${walkMin(e)} min walk</div>
+    <div class="meta">${esc(whenText(e, now))}${e.starts > now ? ' until ' + fmtTime(e.ends) : ''}</div>
+    ${fresh}
+    <div class="btns">
+      <button class="btn primary" id="go">Walk there</button>
+      <button class="btn" id="save">${state.saved.has(e.id) ? 'Saved' : 'Save'}</button>
+    </div>
+    ${live ? `<label>Are you there now? Help keep this accurate.</label>
+    <div class="btns" style="margin-top:4px"><button class="btn ok" id="yes">Still going</button><button class="btn bad" id="no">It's over</button></div>` : ''}
+    ${e.url ? `<div class="note"><a href="${esc(e.url)}" target="_blank" rel="noopener">Open on Engage</a></div>` : ''}`);
+  $('#go').onclick = () => {
+    track('directions', e.id, { walk: walkMin(e) });
+    store.set('cp_pending', { id: e.id, name: e.name, at: Date.now() });
+    const apple = /iPhone|iPad|Mac/.test(navigator.userAgent);
+    window.open(apple ? `https://maps.apple.com/?daddr=${e.lat},${e.lng}&dirflg=w` : `https://www.google.com/maps/dir/?api=1&destination=${e.lat},${e.lng}&travelmode=walking`, '_blank');
+  };
+  $('#save').onclick = () => {
+    state.saved.has(e.id) ? state.saved.delete(e.id) : state.saved.add(e.id);
+    store.set('cp_saved', [...state.saved]); track('save', e.id, { on: state.saved.has(e.id) });
+    $('#save').textContent = state.saved.has(e.id) ? 'Saved' : 'Save';
+  };
+  if (live) {
+    $('#yes').onclick = () => sendCheck(e.id, 'here', 'sheet');
+    $('#no').onclick = () => sendCheck(e.id, 'gone', 'sheet');
+  }
+}
+
+async function sendCheck(id, answer, via) {
+  track('check', id, { answer, via });
+  await fetch('/api/check', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ device, event_id: id, answer, via }) }).catch(() => {});
+  closeSheet(); toast(answer === 'here' ? 'Thanks. Marked as still going.' : answer === 'gone' ? 'Thanks. We will take it down if others agree.' : 'Got it');
+  load();
+}
+
+// After someone taps "Walk there", ask next time they open the app whether it was still going.
+function maybePrompt() {
+  const p = store.get('cp_pending', null);
+  if (!p) return;
+  const age = Date.now() - p.at;
+  if (age < 5 * 60000) return;
+  store.set('cp_pending', null);
+  if (age > 3 * 3600000) return;
+  track('prompt', p.id, { state: 'shown', minutes: Math.round(age / 60000) });
+  openSheet(`<h2>Did you make it?</h2><div class="meta">${esc(p.name)}</div>
+    <label>Was it still going when you got there?</label>
+    <div class="btns"><button class="btn ok" id="py">Yes, still going</button><button class="btn bad" id="pn">No, it was over</button></div>
+    <div class="btns"><button class="btn" id="ps">I didn't go</button></div>`);
+  const answer = a => { track('prompt', p.id, { state: 'answered', answer: a }); sendCheck(p.id, a, 'prompt'); };
+  $('#py').onclick = () => answer('here'); $('#pn').onclick = () => answer('gone'); $('#ps').onclick = () => answer('skipped');
+}
+
+function openPost(fromPick) {
+  const at = state.picked || here();
+  const d = state.draft || { name: '', location: '', minutes: 60, category: 'Social', free_food: false, role: 'student' };
+  state.draft = d;
+  openSheet(`<h2>Post something happening now</h2>
+    <div class="meta">It shows up for people nearby and disappears after an hour unless someone confirms it.</div>
+    <label>What is it?</label><input type="text" id="pName" maxlength="120" placeholder="Leftover pizza after the talk" value="${esc(d.name)}">
+    <label>Where exactly? (room, floor, landmark)</label><input type="text" id="pLoc" maxlength="120" placeholder="Klaus atrium, 1st floor by the stairs" value="${esc(d.location)}">
+    <label>Pin</label><div class="meta">${state.picked ? 'Using the spot you tapped' : state.me ? 'Using your location' : 'Using the Student Center'} · <a href="#" id="pick">tap the map instead</a></div>
+    <label>Type</label><select id="pCat">${['Social', 'Sports', 'Learning', 'Arts', 'Cultural', 'Service', 'Other'].map(c => `<option ${c === d.category ? 'selected' : ''}>${c}</option>`).join('')}</select>
+    <label><input type="checkbox" id="pFood" ${d.free_food ? 'checked' : ''}> Free food</label>
+    <label>You are a</label><select id="pRole">${[['student', 'Student'], ['officer', 'Club or org officer'], ['staff', 'Staff or faculty']].map(([v, l]) => `<option value="${v}" ${v === d.role ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    <div class="btns"><button class="btn" id="pCancel">Cancel</button><button class="btn primary" id="pSend">Post</button></div>`);
+  const grab = () => Object.assign(d, { name: $('#pName').value, location: $('#pLoc').value, category: $('#pCat').value, free_food: $('#pFood').checked, role: $('#pRole').value });
+  $('#pick').onclick = ev => { ev.preventDefault(); grab(); state.picking = true; closeSheet(); toast('Tap the spot on the map'); };
+  $('#pCancel').onclick = () => { state.draft = null; state.picked = null; closeSheet(); };
+  $('#pSend').onclick = async () => {
+    grab();
+    if (d.name.trim().length < 3) { toast('Add a short description'); return; }
+    const r = await fetch('/api/post', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ device, ...d, lat: at.lat, lng: at.lng }) });
+    const out = await r.json().catch(() => ({}));
+    if (!r.ok) { toast(out.error || 'Could not post'); return; }
+    track('post', out.id, { role: d.role, food: d.free_food, cat: d.category });
+    state.draft = null; state.picked = null; closeSheet(); toast('Posted. Thanks!');
+    if (state.when !== 'now') setWhen('now'); else load();
+  };
+}
+$('#postBtn').onclick = () => { track('filter', null, { open: 'post' }); openPost(); };
+
+// ---- controls ----
+function setWhen(w) {
+  state.when = w;
+  document.querySelectorAll('#when .chip').forEach(c => c.classList.toggle('on', c.dataset.w === w || (c.id === 'dayChip' && /^\d/.test(w))));
+  load();
+}
+document.querySelectorAll('#when [data-w]').forEach(c => c.onclick = () => { track('filter', null, { when: c.dataset.w }); setWhen(c.dataset.w); });
+$('#day').onchange = ev => { if (ev.target.value) { track('filter', null, { when: 'day' }); setWhen(ev.target.value); } };
+document.querySelectorAll('#cats .chip').forEach(c => c.onclick = () => {
+  state.cat = state.cat === c.dataset.c ? 'all' : c.dataset.c;
+  document.querySelectorAll('#cats .chip').forEach(x => x.classList.toggle('on', x.dataset.c === state.cat && state.cat !== 'all'));
+  track('filter', null, { cat: state.cat }); render();
+});
+const RADII = [[800, '10 min walk'], [1600, '20 min walk'], [0, 'Anywhere']];
+$('#radiusBtn').onclick = () => {
+  const i = (RADII.findIndex(r => r[0] === state.radius) + 1) % RADII.length;
+  state.radius = RADII[i][0]; $('#radiusBtn').textContent = RADII[i][1]; track('filter', null, { radius: state.radius }); render();
+};
+
+if (navigator.geolocation) navigator.geolocation.getCurrentPosition(p => {
+  const pt = { lat: p.coords.latitude, lng: p.coords.longitude };
+  if (meters(pt, HUB) < 3000) { state.me = pt; meMarker = L.marker([pt.lat, pt.lng], { icon: L.divIcon({ className: '', html: '<div class="me"></div>', iconSize: [14, 14] }) }).addTo(map); map.setView([pt.lat, pt.lng], 16); render(); }
+}, () => {}, { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 });
+
+track('open', null, { standalone: matchMedia('(display-mode: standalone)').matches, ua: /iPhone|iPad/.test(navigator.userAgent) ? 'ios' : /Android/.test(navigator.userAgent) ? 'android' : 'other' });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { track('open', null, { resume: true }); maybePrompt(); load(); } });
+load().then(maybePrompt);
+setInterval(load, 120000);
+</script>
+</body>
+</html>

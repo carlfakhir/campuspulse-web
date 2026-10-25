@@ -1,0 +1,20 @@
+name = "campuspulse"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[observability]
+enabled = true
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = false
+
+[[d1_databases]]
+binding = "DB"
+database_name = "campuspulse-db"
+database_id = "ab2abfe9-2792-4539-b255-880f24c5ae63"
+migrations_dir = "migrations"

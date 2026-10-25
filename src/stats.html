@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CampusPulse Test Data</title>
+<style>
+:root{--ink:#16202b;--muted:#5d6b78;--line:#e3e8ee;--brand:#1f4e79;--bg:#fff}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+main{max-width:860px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:26px 0 8px}
+.muted{color:var(--muted)}
+table{border-collapse:collapse;width:100%}
+td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+.bar{height:12px;background:var(--brand);border-radius:2px}
+a{color:var(--brand)}
+</style>
+</head>
+<body>
+<main>
+<h1>CampusPulse learning prototype: live test data</h1>
+<div class="muted" id="gen">Loading…</div>
+<div id="out"></div>
+<h2>Raw data (CSV)</h2>
+<p><a href="/api/export/logs.csv">Activity log</a> · <a href="/api/export/checks.csv">Still there? checks</a> · <a href="/api/export/posts.csv">Informal posts</a> · <a href="/api/export/events.csv">Ingested Engage events</a> · <a href="/api/export/ingest_runs.csv">Ingest runs</a></p>
+<p class="muted">Devices that used tester code TEST (the team's own debugging) are left out of the usage numbers.</p>
+</main>
+<script>
+const pct = (a, b) => b ? Math.round(100 * a / b) + '%' : 'n/a';
+const row = (k, v) => `<tr><td>${k}</td><td class="n">${v}</td></tr>`;
+fetch('/api/stats').then(r => r.json()).then(s => {
+  const i = s.ingest, u = s.usage, p = s.posts, c = s.checks, n = i.next7days;
+  document.getElementById('gen').textContent = 'Generated ' + new Date(s.generated).toLocaleString() + (i.first ? ' · collecting since ' + new Date(i.first).toLocaleString() : '');
+  const hours = Object.entries(i.coverageNearStudentCenter).sort((a, b) => a[0] - b[0]);
+  const max = Math.max(1, ...hours.map(h => h[1].avg));
+  document.getElementById('out').innerHTML = `
+  <h2>Feed ingest (every 15 minutes)</h2><table>
+  ${row('Ingest runs', i.runs)}
+  ${row('Last run: listings fetched / kept (in person)', i.last ? i.last.fetched + ' / ' + i.last.kept : 'n/a')}
+  ${row('Upcoming in-person events, next 7 days', n.events)}
+  ${row('Placed with Engage coordinates', n.engagePin + ' (' + pct(n.engagePin, n.events) + ')')}
+  ${row('Placed by our building lookup', n.buildingMatch + ' (' + pct(n.buildingMatch, n.events) + ')')}
+  ${row('Could not place on the map', n.unplaced + ' (' + pct(n.unplaced, n.events) + ')')}
+  ${row('Listing free food', n.freeFood + ' (' + pct(n.freeFood, n.events) + ')')}
+  </table>
+  <h2>Events on or starting within the hour, within 800 m of the Student Center (average over the next 7 days)</h2>
+  <table><tr><th>Hour (ET)</th><th>Avg events</th><th>Hours with none</th><th></th></tr>
+  ${hours.map(([h, v]) => `<tr><td>${h}:00</td><td class="n">${v.avg}</td><td class="n">${Math.round(v.zeroShare * 100)}%</td><td style="width:45%"><div class="bar" style="width:${100 * v.avg / max}%"></div></td></tr>`).join('')}
+  </table>
+  <h2>Usage</h2><table>
+  ${row('Devices', u.devices)}${row('Devices with a tester code', u.testers)}
+  ${row('Sessions', u.sessions)}${row('Event views', u.views)}
+  ${row('Sessions with a "Walk there" tap', u.sessionsWithDirections + ' (' + pct(u.sessionsWithDirections, u.sessions) + ')')}
+  ${row('Saves', u.saves)}
+  ${row('Devices that came back on another day', u.returnedAnotherDay + ' (' + pct(u.returnedAnotherDay, u.devices) + ')')}
+  ${row('Week two return (devices first seen 7+ days ago)', u.weekTwoReturned + ' of ' + u.weekTwoEligible)}
+  ${row('"Did you make it?" prompts shown / answered', u.promptsShown + ' / ' + u.promptsAnswered)}
+  </table>
+  <h2>Event views by category</h2><table>
+  ${Object.entries(u.viewsByCategory).sort((a, b) => b[1] - a[1]).map(([k, v]) => row(k, v + ' (' + pct(v, u.views) + ')')).join('') || row('No views yet', '')}
+  </table>
+  <h2>Informal posts and freshness checks</h2><table>
+  ${row('Informal posts', p.total)}${row('Days with at least one post', p.days)}
+  ${Object.entries(p.byRole).map(([k, v]) => row('Posted by ' + k, v)).join('')}
+  ${row('Posts confirmed at least once', p.confirmedAtLeastOnce + ' (' + pct(p.confirmedAtLeastOnce, p.total) + ')')}
+  ${row('Posts taken down as gone', p.takenDownAsGone + ' (' + pct(p.takenDownAsGone, p.total) + ')')}
+  ${row('Still there? answers: still going / over', c.here + ' / ' + c.gone)}
+  ${row('Answers that came from the "Did you make it?" prompt', c.viaPrompt)}
+  </table>`;
+});
+</script>
+</body>
+</html>
